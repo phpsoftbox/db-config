@@ -16,7 +16,32 @@ updated_datetime DATETIME
 UNIQUE (group_key, key)
 ```
 
-Значение хранится как JSON-строка (`value`).
+Значение хранится как JSON-строка (`value`). Значения не шифруются: секреты (пароли, токены) в DbConfig хранятся
+в открытом виде и попадают в ответ `load()`, поэтому их лучше держать в окружении или шифровать в приложении.
+
+## Репозиторий
+
+`DatabaseSettingsRepository` читает группу через `read`-подключение и сохраняет через `write`-подключение
+`ConnectionManagerInterface`:
+
+```php
+use PhpSoftBox\Database\Connection\ConnectionManagerInterface;
+use PhpSoftBox\DbConfig\DatabaseSettingsRepository;
+use PhpSoftBox\DbConfig\SettingsManager;
+use PhpSoftBox\DbConfig\SettingsValueCaster;
+
+$repository = new DatabaseSettingsRepository(
+    connections: $container->get(ConnectionManagerInterface::class),
+    table: 'config',
+    connection: 'default',
+);
+
+$manager = new SettingsManager($repository, new SettingsValueCaster(), $validator);
+```
+
+`upsert()` в одной транзакции обновляет строку по `(group_key, key)` и вставляет её, только если строки нет. Проверка
+существования нужна MySQL/MariaDB: для `UPDATE` без изменений они возвращают 0 затронутых строк. Компонент не кеширует
+настройки: каждый `load()` читает БД, поэтому в долгоживущих процессах сброс состояния не нужен.
 
 ## Описание группы настроек
 
